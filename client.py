@@ -14,31 +14,39 @@ import json
 import pynput
 
 SHOW_VOLUME = False
+MODEL = "large-v3-turbo-q8_0"
+SERVER_PORT = 7654
+WHISPER_SERVER_PATH = "/home/geon/voicekbd/whisper.cpp/build/bin/whisper-server"
+WHISPER_MODEL_PATH = f"/home/geon/voicekbd/whisper.cpp/models/ggml-{MODEL}.bin"
 
 class VoiceTypingGUI:
     def __init__(self, root):
-        self.MODEL = "large-v3-turbo-q8_0"
-        self.SERVER_PORT = 7654
+        self.MODEL = MODEL
+        self.SERVER_PORT = SERVER_PORT
         self.SERVER_URL = f"http://127.0.0.1:{self.SERVER_PORT}/inference"
-        
+        self.WHISPER_SERVER_PATH = WHISPER_SERVER_PATH
+        self.WHISPER_MODEL_PATH = WHISPER_MODEL_PATH
+
         self.root = root
         self.root.title("Voice Typing")
         self.root.geometry("600x450")
-        
-        self.root.focus_force()
         
         self.RECORDING = False
         self.AUDIO_queue = queue.Queue()
         self.keyboard = pynput.keyboard.Controller()
         
+        # Set up bindings first
+        self.root.bind("<space>", lambda event: self.toggle_recording())
+        self.root.bind("<Escape>", lambda event: self.on_closing())
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Then set up UI and start operations
         self.setup_ui()
         self.start_whisper_server()
         self.processing_thread = threading.Thread(target=self.process_audio_queue, daemon=True)
         self.processing_thread.start()
         
-        self.root.bind("<space>", lambda event: self.toggle_recording())
-        self.root.bind("<Escape>", lambda event: self.on_closing())
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.root.focus_force()
         self.start_recording()
 
     def setup_ui(self):
@@ -93,14 +101,47 @@ class VoiceTypingGUI:
 
     def start_whisper_server(self):
         try:
-            requests.get(self.SERVER_URL)
+            requests.get(self.SERVER_URL, timeout=1)
+            self.update_STATUS_display("Whisper server is already running\n")
         except requests.ConnectionError:
-            self.status_label.config(text="Server not running")
-            self.update_STATUS_display("Whisper server not running at " + self.SERVER_URL + "\n")
-            self.update_STATUS_display("Please start it manually and restart.\n")
-            self.root.update()
-            time.sleep(3)
-            self.on_closing()
+            cmd = f"{self.WHISPER_SERVER_PATH} -m {self.WHISPER_MODEL_PATH} --port {self.SERVER_PORT}"
+            print(f"Executing: {cmd}")
+            self.status_label.config(text="Starting Whisper server...")
+            self.update_STATUS_display("Starting Whisper server...\n")
+            
+            # Fork a process to run the Whisper server
+            pid = os.fork()
+            if pid == 0:  # Child process
+                # Redirect stdout and stderr to /dev/null
+                with open(os.devnull, 'w') as devnull:
+                    os.dup2(devnull.fileno(), 1)
+                    os.dup2(devnull.fileno(), 2)
+                # Execute the Whisper server command with correct path
+                os.execv(self.WHISPER_SERVER_PATH, 
+                        [self.WHISPER_SERVER_PATH, '-m', self.WHISPER_MODEL_PATH, 
+                         '--port', str(self.SERVER_PORT)])
+            else:  # Parent process
+                # Wait for server to start (max 30 seconds)
+                start_time = time.time()
+                while time.time() - start_time < 30:
+                    try:
+                        time.sleep(2)  # Give the server some time to start
+                        requests.get(self.SERVER_URL)
+                        self.status_label.config(text="Server running")
+                        self.update_STATUS_display("Whisper server started successfully\n")
+                        return
+                    except requests.ConnectionError:
+                        self.update_STATUS_display("Waiting for server to start...\n")
+                        time.sleep(1)
+                    except Exception as e:
+                        self.update_STATUS_display(f"Error checking server: {str(e)}\n")
+                
+                # If we get here, server failed to start
+                self.status_label.config(text="Server start failed")
+                self.update_STATUS_display("Failed to start Whisper server\n")
+                self.root.update()
+                time.sleep(3)
+                self.on_closing()
 
     def toggle_recording(self):
         if self.RECORDING:
@@ -119,9 +160,10 @@ class VoiceTypingGUI:
         self.RECORDING = False
         self.record_button.config(text="Start Recording")
         self.status_label.config(text="Stopped")
-        # Find and terminate any running 'rec' processes
+        cmd = "pkill -f 'rec -V -c 1'"
+        print(f"Executing: {cmd}")
         try:
-            os.system("pkill -f 'rec -V -c 1'")
+            os.system(cmd)
             # Process any remaining audio in the queue
             if os.path.exists(self.current_audio_file):
                 self.AUDIO_queue.put(self.current_audio_file)
@@ -133,6 +175,8 @@ class VoiceTypingGUI:
         while self.RECORDING:
             tmp_FILE = f"/tmp/voice_{int(time.time())}.mp3"
             self.current_audio_file = tmp_FILE
+            cmd = f"rec -V -c 1 -r 22050 -b 16 -e signed-integer -t mp3 {tmp_FILE} silence 1 0.2 3% 1 0.8 4%"
+            print(f"Executing: {cmd}")
             self.update_STATUS_display(f"Recording to: {tmp_FILE}\n")
             
             master, slave = pty.openpty()
@@ -213,6 +257,8 @@ class VoiceTypingGUI:
     def update_STATUS_display(self, text):
         if not text.strip():
             return
+        # Print to console
+        print(text, end='')
         if "In:" in text:
             self.status_display2.insert(tk.END, text)
             self.status_display2.see(tk.END)
@@ -221,6 +267,8 @@ class VoiceTypingGUI:
             self.status_display.see(tk.END)
 
     def update_transcribe_display(self, text):
+        # Print transcribed text to console
+        print(f"Transcribed: {text}", end='')
         self.transcribe_display.insert(tk.END, text)
         self.transcribe_display.see(tk.END)
 
@@ -235,7 +283,7 @@ class VoiceTypingGUI:
                         data={"temperature": "0.0", "response-format": "json"}
                     )
                 text = json.loads(response.text)["text"].strip().replace('\n', ' ')
-                if len(text) > 5:
+                if len(text) > 15 or "hank you" not in text:
                     self.root.after(0, self.update_transcribe_display, f"{text}\n")
                     for char in text:
                         self.keyboard.tap(char)
