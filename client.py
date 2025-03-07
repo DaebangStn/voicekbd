@@ -12,10 +12,13 @@ import queue
 import requests
 import json
 import pynput
+import socket
+import sys
 
 SHOW_VOLUME = False
 MODEL = "large-v3-turbo-q8_0"
 SERVER_PORT = 7654
+SINGLETON_PORT = 45678  # Choose an unused port
 WHISPER_SERVER_PATH = "/home/geon/voicekbd/whisper.cpp/build/bin/whisper-server"
 WHISPER_MODEL_PATH = f"/home/geon/voicekbd/whisper.cpp/models/ggml-{MODEL}.bin"
 
@@ -303,7 +306,28 @@ class VoiceTypingGUI:
         self.RECORDING = False
         self.root.destroy()
 
+def is_already_running():
+    """Check if another instance is running using socket binding"""
+    try:
+        # Try to create and bind a socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('127.0.0.1', SINGLETON_PORT))
+        sock.listen(1)
+        
+        # Store socket as attribute to prevent garbage collection
+        global singleton_socket
+        singleton_socket = sock
+        return False
+    except socket.error:
+        # Port is in use, meaning another instance is running
+        return True
+
 if __name__ == "__main__":
+    if is_already_running():
+        print("Another instance is already running!")
+        sys.exit(1)
+    
     root = tk.Tk()
     app = VoiceTypingGUI(root)
     root.mainloop()
