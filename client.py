@@ -286,6 +286,8 @@ class VoiceTypingGUI:
                         data={"temperature": "0.0", "response-format": "json"}
                     )
                 text = json.loads(response.text)["text"].strip().replace('\n', ' ')
+                # Remove text enclosed in double asterisks (sound dictation)
+                text = re.sub(r'\*\*.*?\*\*', '', text)
                 if len(text) > 15 or "hank you" not in text:
                     self.root.after(0, self.update_transcribe_display, f"{text}\n")
                     for char in text:
