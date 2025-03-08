@@ -36,6 +36,10 @@ Built for minimalism, it uses a basic Python installation with standard librarie
    ```bash
    git clone https://github.com/daebangstn/voicekbd.git && cd voicekbd
    ```
+4. **Install Python Dependencies**  
+   ```bash
+   pip install pynput
+   ```
 
 ### Usage
 1. Configure a keyboard shortcut (e.g., F12) to launch the script:
@@ -50,7 +54,7 @@ Built for minimalism, it uses a basic Python installation with standard librarie
 5. Recognized text is typed at your cursor position.
 
 ## Inspiration
-Inspired by voice_typing, a cutting-edge voice typing tool for Linux terminals.
+Inspired by the project [voice_typing](https://github.com/themanyone/voice_typing)
 
 ## License
 GPL-2.0 License
