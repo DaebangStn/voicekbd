@@ -6,16 +6,16 @@ import os
 import threading
 import signal
 import re
-import numpy as np
 import time
 import queue
-import requests
 import json
 import pynput
 import socket
 import sys
+import http.client
+import urllib.parse
+from urllib.request import Request, urlopen
 
-SHOW_VOLUME = False
 MODEL = "large-v3-turbo-q8_0"
 SERVER_PORT = 7654
 SINGLETON_PORT = 45678  # Choose an unused port
@@ -67,14 +67,6 @@ class VoiceTypingGUI:
         self.record_button = ttk.Button(control_frame, text="Start Recording", command=self.toggle_recording)
         self.record_button.pack(fill="x")
         
-        if SHOW_VOLUME:
-            volume_frame = ttk.LabelFrame(self.root, text="Microphone Volume")
-            volume_frame.pack(padx=10, pady=5, fill="x")
-            self.volume_bar = ttk.Progressbar(volume_frame, length=300, maximum=100, style="Blue.Horizontal.TProgressbar")
-            self.volume_bar.pack(pady=5)
-            self.volume_value = ttk.Label(volume_frame, text="0.0 dB")
-            self.volume_value.pack(pady=5)
-        
         status_frame = ttk.LabelFrame(self.root, text="Mic Status and Errors")
         status_frame.pack(padx=10, pady=5, fill="both", expand=True)
         status_frame2 = ttk.LabelFrame(self.root, text="Recording Status")
@@ -104,9 +96,11 @@ class VoiceTypingGUI:
 
     def start_whisper_server(self):
         try:
-            requests.get(self.SERVER_URL, timeout=1)
+            conn = http.client.HTTPConnection("127.0.0.1", self.SERVER_PORT)
+            conn.request("GET", "/inference")
+            conn.getresponse()
             self.update_STATUS_display("Whisper server is already running\n")
-        except requests.ConnectionError:
+        except (http.client.HTTPException, ConnectionRefusedError, socket.error):
             cmd = f"{self.WHISPER_SERVER_PATH} -m {self.WHISPER_MODEL_PATH} --port {self.SERVER_PORT}"
             print(f"Executing: {cmd}")
             self.status_label.config(text="Starting Whisper server...")
@@ -129,11 +123,13 @@ class VoiceTypingGUI:
                 while time.time() - start_time < 30:
                     try:
                         time.sleep(2)  # Give the server some time to start
-                        requests.get(self.SERVER_URL)
+                        conn = http.client.HTTPConnection("127.0.0.1", self.SERVER_PORT)
+                        conn.request("GET", "/inference")
+                        conn.getresponse()
                         self.status_label.config(text="Server running")
                         self.update_STATUS_display("Whisper server started successfully\n")
                         return
-                    except requests.ConnectionError:
+                    except (http.client.HTTPException, ConnectionRefusedError, socket.error):
                         self.update_STATUS_display("Waiting for server to start...\n")
                         time.sleep(1)
                     except Exception as e:
@@ -204,10 +200,6 @@ class VoiceTypingGUI:
                                 break
                             for line in data.splitlines():
                                 self.root.after(0, self.update_STATUS_display, line + "\n")
-                                if SHOW_VOLUME:
-                                    volume_percent = self.parse_volume(line)
-                                    db = -80 + (volume_percent / 100) * 80
-                                    self.update_volume_display(volume_percent, db)
                         except OSError:
                             # Handle Input/output error gracefully
                             break
@@ -280,14 +272,42 @@ class VoiceTypingGUI:
             audio_file = self.AUDIO_queue.get()
             try:
                 with open(audio_file, 'rb') as f:
-                    response = requests.post(
-                        self.SERVER_URL,
-                        files={"file": f},
-                        data={"temperature": "0.0", "response-format": "json"}
-                    )
-                text = json.loads(response.text)["text"].strip().replace('\n', ' ')
+                    file_data = f.read()
+                    
+                # Create a boundary for multipart form data
+                boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
+                
+                # Prepare the multipart form data
+                body = b''
+                # Add the form field
+                body += f'--{boundary}\r\n'.encode()
+                body += f'Content-Disposition: form-data; name="temperature"\r\n\r\n'.encode()
+                body += f'0.0\r\n'.encode()
+                body += f'--{boundary}\r\n'.encode()
+                body += f'Content-Disposition: form-data; name="response-format"\r\n\r\n'.encode()
+                body += f'json\r\n'.encode()
+                # Add the file
+                body += f'--{boundary}\r\n'.encode()
+                body += f'Content-Disposition: form-data; name="file"; filename="{os.path.basename(audio_file)}"\r\n'.encode()
+                body += f'Content-Type: audio/mpeg\r\n\r\n'.encode()
+                body += file_data
+                body += f'\r\n--{boundary}--\r\n'.encode()
+                
+                # Set up the connection
+                conn = http.client.HTTPConnection("127.0.0.1", self.SERVER_PORT)
+                headers = {
+                    'Content-Type': f'multipart/form-data; boundary={boundary}',
+                    'Content-Length': str(len(body))
+                }
+                
+                # Send the request
+                conn.request("POST", "/inference", body=body, headers=headers)
+                response = conn.getresponse()
+                response_data = response.read().decode('utf-8')
+                
+                text = json.loads(response_data)["text"].strip().replace('\n', ' ')
                 # Remove text enclosed in double asterisks (sound dictation)
-                text = re.sub(r'\*\*.*?\*\*', '', text)
+                text = re.sub(r'\*.*?\*', '', text)
                 if len(text) > 15 or "hank you" not in text:
                     self.root.after(0, self.update_transcribe_display, f"{text}\n")
                     for char in text:
