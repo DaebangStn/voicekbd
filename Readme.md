@@ -1,6 +1,6 @@
 # GUI Voice Keyboard for Minimalist Linux Users
 
-A lightweight voice keyboard using `[whisper.cpp](https://github.com/ggerganov/whisper.cpp)` for minimalist Linux users. This project integrates with function key shortcuts—press a key, and a GUI appears for dictating text. It runs the Whisper server locally, ensuring privacy without external APIs.
+A lightweight voice keyboard using [whisper.cpp](https://github.com/ggerganov/whisper.cpp) for minimalist Linux users. This project integrates with function key shortcuts—press a key, and a GUI appears for dictating text. It runs the Whisper server locally, ensuring privacy without external APIs.
 
 Built for minimalism, it uses a basic Python installation with standard libraries. The GUI leverages Tkinter and relies solely on Python's built-in system libraries.
 
