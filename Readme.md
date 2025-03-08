@@ -60,6 +60,11 @@ Inspired by the project [voice_typing](https://github.com/themanyone/voice_typin
 GPL-2.0 License
 
 ## Usage
+Shortcut:
+- Space for toggle recording and Escape for close
+- Escape for close
+
+
 Configure a keyboard shortcut (e.g., F12) to launch the script:
 
 Use your desktop environment’s shortcut settings or a tool like xbindkeys.
