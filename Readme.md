@@ -70,8 +70,5 @@ Configure a keyboard shortcut (e.g., F12) to launch the script:
 Use your desktop environment’s shortcut settings or a tool like xbindkeys.
 Press the shortcut to open the GUI, speak, and insert text at your cursor.
 
-## Inspiration
-Inspired by voice_typing, a cutting-edge voice typing tool for Linux terminals.
-
 ## License
 GPL-2.0 License
