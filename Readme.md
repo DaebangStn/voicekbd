@@ -56,9 +56,6 @@ Built for minimalism, it uses a basic Python installation with standard librarie
 ## Inspiration
 Inspired by the project [voice_typing](https://github.com/themanyone/voice_typing)
 
-## License
-GPL-2.0 License
-
 ## Usage
 Shortcut:
 - Space for toggle recording and Escape for close
@@ -69,6 +66,3 @@ Configure a keyboard shortcut (e.g., F12) to launch the script:
 
 Use your desktop environment’s shortcut settings or a tool like xbindkeys.
 Press the shortcut to open the GUI, speak, and insert text at your cursor.
-
-## License
-GPL-2.0 License
