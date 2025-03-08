@@ -48,7 +48,7 @@ Built for minimalism, it uses a basic Python installation with standard librarie
    ```
    Use your desktop environment’s shortcut settings or a tool like xbindkeys.
 
-2. Press the configured shortcut to launch the GUI.
+2. Press the configured shortcut(Space for toggle recording and Escape for close) to launch the GUI.
 3. Dictate your text.
 4. whisper.cpp processes the audio locally.
 5. Recognized text is typed at your cursor position.
