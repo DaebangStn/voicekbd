@@ -204,22 +204,31 @@ class VoiceTypingGUI:
             # Fork a process to run the Whisper server
             pid = os.fork()
             if pid == 0:  # Child process
-                # Redirect stdout and stderr to /dev/null
-                with open(os.devnull, "w") as devnull:
-                    os.dup2(devnull.fileno(), 1)
-                    os.dup2(devnull.fileno(), 2)
-                # Execute the Whisper server command with correct path
-                os.execv(
-                    self.WHISPER_SERVER_PATH,
-                    [
+                try:
+                    # Set up death signal - child will receive SIGTERM when parent dies
+                    # prctl.set_pdeathsig(signal.SIGTERM)
+                    
+                    # Redirect stdout and stderr to /dev/null
+                    with open(os.devnull, "w") as devnull:
+                        os.dup2(devnull.fileno(), 1)
+                        os.dup2(devnull.fileno(), 2)
+                    # Execute the Whisper server command with correct path
+                    os.execv(
                         self.WHISPER_SERVER_PATH,
-                        "-m",
-                        self.WHISPER_MODEL_PATH,
-                        "--port",
-                        str(self.SERVER_PORT),
-                    ],
-                )
+                        [
+                            self.WHISPER_SERVER_PATH,
+                            "-m",
+                            self.WHISPER_MODEL_PATH,
+                            "--port",
+                            str(self.SERVER_PORT),
+                        ],
+                    )
+                except Exception as e:
+                    print(f"Child process error: {e}")
+                    os._exit(1)  # Use os._exit in child process
             else:  # Parent process
+                # Store the PID to terminate it later if needed
+                self.whisper_server_pid = pid
                 # Wait for server to start (max 30 seconds)
                 start_time = time.time()
                 while time.time() - start_time < 30:
@@ -486,6 +495,19 @@ class VoiceTypingGUI:
     def on_closing(self):
         self.RECORDING = False
         self.cleanup_temp_files()
+        
+        # Terminate the Whisper server if we started it (as a backup)
+        if hasattr(self, 'whisper_server_pid'):
+            try:
+                pass
+                # os.kill(self.whisper_server_pid, signal.SIGTERM)
+                # self.update_STATUS_display("[INFO] Terminated Whisper server\n")
+            except ProcessLookupError:
+                # Process already terminated
+                pass
+            except Exception as e:
+                print(f"Error terminating Whisper server: {e}")
+        
         self.root.destroy()
 
     def update_thresholds(self):
