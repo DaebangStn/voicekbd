@@ -26,8 +26,7 @@ WHISPER_SERVER_PATH = f"{PROJECT_ROOT}/whisper.cpp/build/bin/whisper-server"
 WHISPER_MODEL_PATH = f"{PROJECT_ROOT}/whisper.cpp/models/ggml-{MODEL}.bin"
 
 # Sox threshold for recording
-THRESH_START = 4.0
-THRESH_END = 4.0
+THRESH_START = 2.0
 
 FONT_SIZE = 12
 
@@ -307,7 +306,7 @@ class VoiceTypingGUI:
                         "rec","-V","-c","1","-r","22050","-b","16","-e","signed-integer","-t","mp3","-e","signed-integer",
                         "-t","mp3",tmp_FILE,"silence",
                         "1","0.2",f"{THRESH_START}%",
-                        "1","0.8",f"{THRESH_END}%",
+                        "1","0.8",f"{THRESH_START}%",
                     ],
                 )
             else:
